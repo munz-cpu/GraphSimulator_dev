@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -17,6 +18,9 @@ namespace GraphSimulator
         private readonly List<string> redo = new List<string>();
         private GraphCanvasGraphic surface;
         private GraphCanvasLabels labels;
+        private Button[] sceneButtons;
+        private readonly Dictionary<Button, float> buttonClickTimes = new Dictionary<Button, float>();
+        private readonly Dictionary<Button, float> queuedClickTimes = new Dictionary<Button, float>();
         private Text statsLabel, statusLabel, inspectorSummary;
         private InputField keyInput, nameInput, weightInput;
         private Slider sizeSlider, thicknessSlider;
@@ -24,6 +28,8 @@ namespace GraphSimulator
         private bool edgeTool, draggingNodes, panning, dragRecorded;
         private Vector2 lastPointer, pan;
         private float zoom = 1f;
+        private bool previousRunInBackground;
+        private bool inputInitialized;
         private string status = "Double-click empty canvas to add a node.";
         private readonly Color[] palette = { new Color(.22f,.55f,.92f), new Color(.24f,.72f,.57f), new Color(.97f,.63f,.28f), new Color(.83f,.38f,.49f), new Color(.64f,.48f,.85f), new Color(.88f,.89f,.94f) };
 
@@ -36,6 +42,9 @@ namespace GraphSimulator
 
         private void Start()
         {
+            previousRunInBackground = Application.runInBackground;
+            Application.runInBackground = true;
+            inputInitialized = true;
             var canvas = FindAnyObjectByType<Canvas>();
             if (canvas == null) { Debug.LogError("Graph Canvas is missing from the scene."); return; }
             Transform root = canvas.transform;
@@ -46,7 +55,6 @@ namespace GraphSimulator
             for (int i = 0; i < modes.Length; i++) { int index = i; Bind(root, "TopBar/" + modes[i], () => ChangeKind((GraphKind)index)); }
             Bind(root, "TopBar/ClearButton", ClearDocument);
             Bind(root, "LeftPanel/EdgeToolButton", () => { edgeTool = !edgeTool; edgeStart = -1; status = edgeTool ? "Choose source and destination nodes." : "Select mode."; Refresh(); });
-            Bind(root, "LeftPanel/AddNodeButton", () => AddNode(-pan / zoom));
             Bind(root, "LeftPanel/UndoButton", Undo);
             Bind(root, "LeftPanel/RedoButton", Redo);
             Bind(root, "LeftPanel/SaveButton", Save);
@@ -65,7 +73,19 @@ namespace GraphSimulator
             if (sizeSlider != null) { sizeSlider.minValue = 32; sizeSlider.maxValue = 120; sizeSlider.onValueChanged.AddListener(ChangeSize); }
             if (thicknessSlider != null) { thicknessSlider.minValue = 1; thicknessSlider.maxValue = 12; thicknessSlider.onValueChanged.AddListener(ChangeThickness); }
             for (int i = 0; i < palette.Length; i++) { int index = i; Bind(root, "RightPanel/ColorButton" + i, () => ChangeColor(palette[index])); }
+            sceneButtons = root.GetComponentsInChildren<Button>(true);
+            foreach (var sceneButton in sceneButtons)
+            {
+                Button captured = sceneButton;
+                captured.onClick.AddListener(() => buttonClickTimes[captured] = Time.realtimeSinceStartup);
+            }
             Refresh();
+        }
+
+        private void OnDestroy()
+        {
+            if (!inputInitialized) return;
+            Application.runInBackground = previousRunInBackground;
         }
 
         private static void Bind(Transform root, string path, UnityEngine.Events.UnityAction action)
@@ -82,6 +102,34 @@ namespace GraphSimulator
             else if (keyboard.ctrlKey.isPressed && keyboard.yKey.wasPressedThisFrame) Redo();
             else if (keyboard.deleteKey.wasPressedThisFrame && !EditingInput()) DeleteSelected();
             else if (keyboard.escapeKey.wasPressedThisFrame) { edgeTool = false; ResetSelection(); Refresh(); }
+        }
+
+        private void OnGUI()
+        {
+            if (!Application.isPlaying || sceneButtons == null) return;
+            var current = Event.current;
+            if (current == null || current.type != EventType.MouseUp || current.button != 0) return;
+            var screenPoint = new Vector2(current.mousePosition.x, Screen.height - current.mousePosition.y);
+            for (int i = sceneButtons.Length - 1; i >= 0; i--)
+            {
+                Button button = sceneButtons[i];
+                if (!button.isActiveAndEnabled || !button.interactable) continue;
+                var rect = button.GetComponent<RectTransform>();
+                if (rect == null || !RectTransformUtility.RectangleContainsScreenPoint(rect, screenPoint)) continue;
+                float now = Time.realtimeSinceStartup;
+                if (queuedClickTimes.TryGetValue(button, out float queued) && now - queued < .05f) return;
+                queuedClickTimes[button] = now;
+                StartCoroutine(DispatchClickIfNeeded(button, now));
+                return;
+            }
+        }
+
+        private IEnumerator DispatchClickIfNeeded(Button button, float observedAt)
+        {
+            yield return null;
+            if (button == null || !button.isActiveAndEnabled || !button.interactable) yield break;
+            if (buttonClickTimes.TryGetValue(button, out float handledAt) && handledAt >= observedAt) yield break;
+            button.onClick.Invoke();
         }
 
         private static bool EditingInput()
@@ -180,6 +228,7 @@ namespace GraphSimulator
             if (document.kind == GraphKind.BinarySearchTree && keyInput != null) keyInput.SetTextWithoutNotify((key + 1).ToString());
             status = "Node #" + node.id + " created."; Refresh();
         }
+        public void AddNodeFromButton() { AddNode(-pan / zoom); }
         private void DeleteSelected()
         {
             if (selectedNodes.Count == 0 && selectedEdge < 0) return;
