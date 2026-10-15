@@ -28,6 +28,13 @@ internal static class ApplyLightTheme
             label.font = font;
             label.color = TextColor(label);
             label.fontSize = TextSize(label);
+            if (label.transform.parent != null && label.transform.parent.GetComponent<InputField>() != null)
+            {
+                var rect = label.rectTransform;
+                Undo.RecordObject(rect, "Fit graph input text");
+                rect.sizeDelta = new Vector2(rect.sizeDelta.x, -4);
+                EditorUtility.SetDirty(rect);
+            }
             EditorUtility.SetDirty(label);
             textCount++;
         }
@@ -80,7 +87,9 @@ internal static class ApplyLightTheme
             canvasRect.GetWorldCorners(corners);
             var bounds = new Bounds((corners[0] + corners[2]) * .5f, corners[2] - corners[0]);
             sceneView.in2DMode = true;
-            sceneView.Frame(bounds, true);
+            sceneView.pivot = bounds.center;
+            var aspect = sceneView.camera != null ? sceneView.camera.aspect : 16f / 9f;
+            sceneView.size = Mathf.Max(bounds.extents.y, bounds.extents.x / aspect) * 1.18f;
             sceneView.Repaint();
         }
         Debug.Log($"Graph light theme applied: {textCount} text objects, {imageCount} images, node labels use {font.name}.");
