@@ -20,7 +20,7 @@ namespace GraphSimulator
         {
             vh.Clear();
             Rect area = rectTransform.rect;
-            AddRect(vh, area, new Color(.075f, .10f, .15f));
+            AddRect(vh, area, new Color(.985f, .987f, .99f));
             if (editor == null) editor = FindAnyObjectByType<GraphEditorRuntime>();
             if (editor == null || editor.Document == null) return;
             float zoom = editor.Zoom;
@@ -29,9 +29,9 @@ namespace GraphSimulator
             if (spacing >= 12f)
             {
                 for (float x = area.xMin + Mathf.Repeat(-area.xMin + pan.x, spacing); x < area.xMax; x += spacing)
-                    AddRect(vh, new Rect(x, area.yMin, 1, area.height), new Color(.12f, .16f, .21f));
+                    AddRect(vh, new Rect(x, area.yMin, 1, area.height), new Color(.88f, .89f, .91f));
                 for (float y = area.yMin + Mathf.Repeat(-area.yMin + pan.y, spacing); y < area.yMax; y += spacing)
-                    AddRect(vh, new Rect(area.xMin, y, area.width, 1), new Color(.12f, .16f, .21f));
+                    AddRect(vh, new Rect(area.xMin, y, area.width, 1), new Color(.88f, .89f, .91f));
             }
             foreach (var edge in editor.Document.edges)
             {
@@ -51,7 +51,7 @@ namespace GraphSimulator
                     AddLine(vh, end, back + side, edge.thickness * zoom, edge.color);
                     AddLine(vh, end, back - side, edge.thickness * zoom, edge.color);
                 }
-                if (editor.SelectedEdge == edge.id) AddLine(vh, start, end, 2, new Color(.30f, .70f, .94f));
+                if (editor.SelectedEdge == edge.id) AddLine(vh, start, end, 2, new Color(.34f, .38f, .42f));
             }
             foreach (var node in editor.Document.nodes)
             {
@@ -60,7 +60,7 @@ namespace GraphSimulator
                 Rect box = new Rect(center.x - size * .5f, center.y - size * .5f, size, size);
                 if (!area.Overlaps(box)) continue;
                 bool selected = editor.IsNodeSelected(node.id) || editor.EdgeStart == node.id;
-                if (selected) AddRect(vh, new Rect(box.x - 3, box.y - 3, box.width + 6, box.height + 6), new Color(.30f, .70f, .94f));
+                if (selected) AddRect(vh, new Rect(box.x - 3, box.y - 3, box.width + 6, box.height + 6), new Color(.34f, .38f, .42f));
                 AddRect(vh, box, node.color);
             }
         }

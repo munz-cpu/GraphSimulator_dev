@@ -13,7 +13,7 @@ namespace GraphSimulator
         public string name;
         public int key;
         public Vector2 position;
-        public Color color = new Color(0.22f, 0.55f, 0.92f);
+        public Color color = new Color(0.38f, 0.42f, 0.47f);
         public float size = 64f;
     }
 
@@ -25,7 +25,7 @@ namespace GraphSimulator
         public int to;
         public int slot; // 0 = left, 1 = right for binary trees.
         public float weight = 1f;
-        public Color color = new Color(0.37f, 0.48f, 0.63f);
+        public Color color = new Color(0.49f, 0.53f, 0.57f);
         public float thickness = 3f;
     }
 
