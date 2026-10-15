@@ -26,6 +26,8 @@ namespace GraphSimulator
         private Slider sizeSlider, thicknessSlider;
         private int selectedEdge = -1, edgeStart = -1;
         private bool edgeTool, draggingNodes, panning, dragRecorded;
+        private bool guiPointerActive;
+        private PointerEventData.InputButton guiPointerButton;
         private Vector2 lastPointer, pan;
         private float zoom = 1f;
         private bool previousRunInBackground;
@@ -106,10 +108,40 @@ namespace GraphSimulator
 
         private void OnGUI()
         {
-            if (!Application.isPlaying || sceneButtons == null) return;
+            if (!Application.isPlaying || sceneButtons == null || surface == null) return;
             var current = Event.current;
-            if (current == null || current.type != EventType.MouseUp || current.button != 0) return;
+            if (current == null) return;
             var screenPoint = new Vector2(current.mousePosition.x, Screen.height - current.mousePosition.y);
+            bool overCanvas = RectTransformUtility.RectangleContainsScreenPoint(surface.rectTransform, screenPoint);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(surface.rectTransform, screenPoint, null, out Vector2 local);
+            if (current.type == EventType.MouseDown && overCanvas && (current.button == 0 || current.button == 1 || current.button == 2))
+            {
+                guiPointerActive = true;
+                guiPointerButton = current.button == 1 ? PointerEventData.InputButton.Right :
+                    current.button == 2 ? PointerEventData.InputButton.Middle : PointerEventData.InputButton.Left;
+                CanvasPointerDown(local, PointerData(guiPointerButton, current.clickCount), current.shift);
+                return;
+            }
+            if (current.type == EventType.MouseDrag && guiPointerActive)
+            {
+                CanvasDrag(local, PointerData(guiPointerButton, current.clickCount));
+                return;
+            }
+            if (current.type == EventType.MouseUp && guiPointerActive &&
+                (current.button == 0 && guiPointerButton == PointerEventData.InputButton.Left ||
+                 current.button == 1 && guiPointerButton == PointerEventData.InputButton.Right ||
+                 current.button == 2 && guiPointerButton == PointerEventData.InputButton.Middle))
+            {
+                CanvasEndDrag(PointerData(guiPointerButton, current.clickCount));
+                guiPointerActive = false;
+                return;
+            }
+            if (current.type == EventType.ScrollWheel && overCanvas)
+            {
+                CanvasScroll(local, -current.delta.y);
+                return;
+            }
+            if (current.type != EventType.MouseUp || current.button != 0) return;
             for (int i = sceneButtons.Length - 1; i >= 0; i--)
             {
                 Button button = sceneButtons[i];
@@ -122,6 +154,11 @@ namespace GraphSimulator
                 StartCoroutine(DispatchClickIfNeeded(button, now));
                 return;
             }
+        }
+
+        private static PointerEventData PointerData(PointerEventData.InputButton button, int clickCount)
+        {
+            return new PointerEventData(EventSystem.current) { button = button, clickCount = Mathf.Max(1, clickCount) };
         }
 
         private IEnumerator DispatchClickIfNeeded(Button button, float observedAt)
@@ -138,9 +175,14 @@ namespace GraphSimulator
             return selected != null && selected.GetComponent<InputField>() != null;
         }
 
-        public void CanvasPointerDown(Vector2 local, PointerEventData e)
+        public void CanvasPointerDown(Vector2 local, PointerEventData e, bool guiShift = false)
         {
-            if (e.button == PointerEventData.InputButton.Middle) { panning = true; lastPointer = local; return; }
+            if (e.button == PointerEventData.InputButton.Right || e.button == PointerEventData.InputButton.Middle)
+            {
+                panning = true;
+                lastPointer = local;
+                return;
+            }
             if (e.button != PointerEventData.InputButton.Left) return;
             int nodeId = HitNode(local);
             if (nodeId >= 0)
@@ -148,7 +190,7 @@ namespace GraphSimulator
                 if (edgeTool) SelectEdgeEndpoint(nodeId);
                 else
                 {
-                    bool shift = Keyboard.current != null && Keyboard.current.shiftKey.isPressed;
+                    bool shift = guiShift || Keyboard.current != null && Keyboard.current.shiftKey.isPressed;
                     if (shift) { if (!selectedNodes.Add(nodeId)) selectedNodes.Remove(nodeId); }
                     else if (!selectedNodes.Contains(nodeId)) { selectedNodes.Clear(); selectedNodes.Add(nodeId); }
                     selectedEdge = -1; draggingNodes = selectedNodes.Contains(nodeId); dragRecorded = false; lastPointer = local;
